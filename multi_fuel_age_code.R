@@ -2,12 +2,14 @@ library(FireHistory)
 
 # regular workflow --------------------------------------------------------
 
-aoi <- user_aoi("../warren/vectors/warren_tenure_diss.shp", name = "warren")
+district <- "albany"
 
-# data <- assemble_dataNEW(fire_path = "./corp_data/DBCA_Fire_History_DBCA_060.shp",
-#                          from = 1988, to = 2022, aoi = aoi, accessed_on = "24/04/23")
+district_vect <- paste0("./vectors/", district, "_ten_diss.shp")
 
-data <- assemble_data(fire_path = "../corp_data/DBCA_Fire_History_DBCA_060.shp",
+aoi <- user_aoi(district_vect, name = district)
+
+
+data <- assemble_data(fire_path = "./corp_data/DBCA_Fire_History_DBCA_060.shp",
                       FYfrom = 1950, FYto = 2023, aoi = aoi, accessed_on = "28/04/23")
 
 # additional packages -----------------------------------------------------
@@ -21,15 +23,15 @@ library(fs)
 # setup folder structure --------------------------------------------------
 cli::cli_progress_step("Creating Folder Structure")
 
-by_fol <- "./01_by"
-yob_fol <- "./02_yob"
-yslb_fol <- "./03_yslb"
-wfm_fol <- "./04_wfm"
-wffa_fol <- "./05_wffa"
-ofm_fol <- "./04_ofm"
-offa_fol <- "./05_offa"
+by_fol <- paste0("./", district, "/01_by")
+yob_fol <- paste0("./", district, "/02_yob")
+tsf_fol <- paste0("./", district, "/03_tsf")
+wfm_fol <- paste0("./", district, "/04_wfm")
+wffa_fol <- paste0("./", district, "/05_wffa")
+ofm_fol <- paste0("./", district, "/04_ofm")
+offa_fol <- paste0("./", district, "/05_offa")
 
-fols <- c(by_fol, yob_fol, yslb_fol, wfm_fol, wffa_fol, ofm_fol, offa_fol)
+fols <- c(by_fol, yob_fol, tsf_fol, wfm_fol, wffa_fol, ofm_fol, offa_fol)
 fs::dir_create(fols)
 
 
@@ -112,22 +114,22 @@ for(i in 2:yob_iter){
 
 
 # year since last burn ----------------------------------------------------
-cli::cli_progress_step("Creating Annual YSLB Rasters")
+cli::cli_progress_step("Creating Annual tsf Rasters")
 
-yslb_noms <- fs::path(yslb_fol, gsub("yob", "yslb", dir(yob_fol)))
+tsf_noms <- fs::path(tsf_fol, gsub("yob", "tsf", dir(yob_fol)))
 
-for(i in seq_along(yslb_noms)){
+for(i in seq_along(tsf_noms)){
   yob <- terra::rast(fs::dir_ls(yob_fol)[i])
-  yslb <- full_fyrs[i] - yob
-  terra::writeRaster(yslb, yslb_noms[i])
+  tsf <- full_fyrs[i] - yob
+  terra::writeRaster(tsf, tsf_noms[i])
 }
 
 
 # fuel age area matrix ----------------------------------------------------
 cli::cli_progress_step("Calculating Fuel Age Matrix")
 
-yslb_stk <- terra::rast(fs::dir_ls(yslb_fol))
-names(yslb_stk) <- full_fyrs
+tsf_stk <- terra::rast(fs::dir_ls(tsf_fol))
+names(tsf_stk) <- full_fyrs
 
 # total area
 tot_area <- dplyr::as_tibble(terra::freq(aoi_msk)) %>%
@@ -136,7 +138,7 @@ tot_area <- dplyr::as_tibble(terra::freq(aoi_msk)) %>%
 # calc fuel age area stats
 fuel_df <- tibble::tibble()
 for(i in seq_along(full_fyrs)){
-  out <- dplyr::as_tibble(terra::freq(yslb_stk[[i]])) %>%
+  out <- dplyr::as_tibble(terra::freq(tsf_stk[[i]])) %>%
     dplyr::mutate(layer = full_fyrs[i],
                   value = paste0("fa", value),
                   area_ha = count * 0.09) %>%
@@ -209,7 +211,7 @@ for(yr in wf_iter){
                   mask_area_ha = count * 0.09) %>%
     dplyr::select(year, mask_area_ha)
   wf_totha_df <- dplyr::bind_rows(wf_totha_df, out_df)
-  wf_burnt <- terra::rast(fs::path(yslb_fol, paste0("yslb", yr-1, ".tif"))) %>%
+  wf_burnt <- terra::rast(fs::path(tsf_fol, paste0("tsf", yr-1, ".tif"))) %>%
     terra::crop(wfm, mask = TRUE)
   terra::writeRaster(wf_burnt, fs::path(wffa_fol, paste0("wffa", yr, ".tif")))
 }
@@ -299,7 +301,7 @@ for(yr in of_iter){
                   mask_area_ha = count * 0.09) %>%
     dplyr::select(year, mask_area_ha)
   of_totha_df <- dplyr::bind_rows(of_totha_df, out_df)
-  of_burnt <- terra::rast(fs::path(yslb_fol, paste0("yslb", yr-1, ".tif"))) %>%
+  of_burnt <- terra::rast(fs::path(tsf_fol, paste0("tsf", yr-1, ".tif"))) %>%
     terra::crop(ofm, mask = TRUE)
   terra::writeRaster(of_burnt, fs::path(offa_fol, paste0("offa", yr, ".tif")))
 }
