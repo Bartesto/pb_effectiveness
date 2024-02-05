@@ -133,9 +133,11 @@ cli::cli_progress_step("Calculating Fuel Age Matrix")
 tsf_stk <- terra::rast(fs::dir_ls(tsf_fol))
 names(tsf_stk) <- full_fyrs
 
+pix_ha <- resolution^2/10000
+
 # total area
 tot_area <- dplyr::as_tibble(terra::freq(aoi_msk)) %>%
-  dplyr::mutate(area_ha = count * 0.09) %>%
+  dplyr::mutate(area_ha = count * pix_ha) %>%
   dplyr::pull(area_ha)
 # calc fuel age area stats
 fuel_df <- tibble::tibble()
@@ -143,7 +145,7 @@ for(i in seq_along(full_fyrs)){
   out <- dplyr::as_tibble(terra::freq(tsf_stk[[i]])) %>%
     dplyr::mutate(layer = full_fyrs[i],
                   value = paste0("fa", value),
-                  area_ha = count * 0.09) %>%
+                  area_ha = count * pix_ha) %>%
     dplyr::rename(fuel_age = value,
                   year = layer) %>%
     dplyr::select(-count)
@@ -160,7 +162,8 @@ fuel_mat <- fuel_df %>%
   dplyr::arrange(desc(id)) %>%
   dplyr::select(-id)
 
-fa_mat_nom <- paste0("./fuel_age_area_matrix_", minyr, "-", maxyr, ".csv")
+fa_mat_nom <- paste0("./" ,district, "/", district, "_fuel_age_area_matrix_", 
+                     minyr, "-", maxyr, ".csv")
 
 readr::write_csv(fuel_mat, file = fa_mat_nom)
 
@@ -210,7 +213,7 @@ for(yr in wf_iter){
     terra::freq() %>%
     dplyr::as_tibble() %>%
     dplyr::mutate(year = paste0("wf", yr),
-                  mask_area_ha = count * 0.09) %>%
+                  mask_area_ha = count * pix_ha) %>%
     dplyr::select(year, mask_area_ha)
   wf_totha_df <- dplyr::bind_rows(wf_totha_df, out_df)
   wf_burnt <- terra::rast(fs::path(tsf_fol, paste0("tsf", yr-1, ".tif"))) %>%
@@ -227,7 +230,7 @@ for(i in seq_along(wf_iter)){
   out <- dplyr::as_tibble(terra::freq(wffa_stk[[i]])) %>%
     dplyr::mutate(layer = paste0("wf", wf_iter[i]),
                   value = paste0("fa", value),
-                  area_ha = count * 0.09) %>%
+                  area_ha = count * pix_ha) %>%
     dplyr::rename(fuel_age = value,
                   year = layer) %>%
     dplyr::select(-count)
@@ -300,7 +303,7 @@ for(yr in of_iter){
     terra::freq() %>%
     dplyr::as_tibble() %>%
     dplyr::mutate(year = paste0("other", yr),
-                  mask_area_ha = count * 0.09) %>%
+                  mask_area_ha = count * pix_ha) %>%
     dplyr::select(year, mask_area_ha)
   of_totha_df <- dplyr::bind_rows(of_totha_df, out_df)
   of_burnt <- terra::rast(fs::path(tsf_fol, paste0("tsf", yr-1, ".tif"))) %>%
@@ -320,7 +323,7 @@ for(i in seq_along(of_iter)){
   out <- dplyr::as_tibble(terra::freq(offa_stk[[i]])) %>%
     dplyr::mutate(layer = paste0("other", of_iter[i]),
                   value = paste0("fa", value),
-                  area_ha = count * 0.09) %>%
+                  area_ha = count * pix_ha) %>%
     dplyr::rename(fuel_age = value,
                   year = layer) %>%
     dplyr::select(-count)
