@@ -46,8 +46,10 @@ u_fyrs <- f_vecs %>%
   tidyterra::pull(var = fin_y) %>%
   unique()
 
-template <- terra::rast(data[["aoi_alb"]], res = 30)
-aoi_msk <- data[["aoi_msk"]]
+# can change resolution here
+resolution <- 30
+template <- terra::rast(data[["aoi_alb"]], res = resolution)
+aoi_msk <- terra::rasterize(terra::vect(data[["aoi_alb"]]), template)
 
 for(i in seq_along(u_fyrs)){
   by <- f_vecs %>%
