@@ -115,8 +115,8 @@ for(i in 2:yob_iter){
 }
 
 
-# year since last burn ----------------------------------------------------
-cli::cli_progress_step("Creating Annual tsf Rasters")
+# time since last fire ----------------------------------------------------
+cli::cli_progress_step("Creating Annual Time Since Fire Rasters")
 
 tsf_noms <- fs::path(tsf_fol, gsub("yob", "tsf", dir(yob_fol)))
 
