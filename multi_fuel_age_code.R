@@ -10,7 +10,7 @@ aoi <- user_aoi(district_vect, name = district)
 
 
 data <- assemble_data(fire_path = "./corp_data/DBCA_Fire_History_DBCA_060.shp",
-                      FYfrom = 1950, FYto = 2023, aoi = aoi, accessed_on = "28/04/23")
+                      FYfrom = 1900, FYto = 2023, aoi = aoi, accessed_on = "28/04/23")
 
 # additional packages -----------------------------------------------------
 
