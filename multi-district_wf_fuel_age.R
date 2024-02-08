@@ -9,8 +9,12 @@ library(tictoc)
 
 
 
-districts <- c("albany", "blackwood", "donnelly", "frankland", "perth_hills",
-               "swan_coastal", "wellington")
+districts <- c("blackwood", "donnelly", "frankland", "perth_hills",
+               "swan_coastal", "wellington")#"albany", 
+
+resolution <- 20
+
+# districts <- "albany"
 
 
 # districts <- c("albany")
@@ -21,23 +25,23 @@ for(district in districts){
   district_shp <- paste0("./vectors/", district, "_ten_diss.shp")
   aoi <- user_aoi(district_shp, name = district)
   data <- assemble_data(fire_path = "./dbca_060/DBCA_Fire_History_DBCA_060.shp",
-                        FYfrom = 1900, FYto = 2023, aoi = aoi,
+                        FYfrom = 1900, FYto = 2024, aoi = aoi,
                         accessed_on = "02/09/2024")
 
   # setup folder structure --------------------------------------------------
   cli::cli_progress_step("Creating Folder Structure")
 
-  tdir <- paste0("./", district, "/")
+  tdir <- paste0("./", district, resolution, "/")
 
   by_fol <- paste0(tdir, "01_by")
   yob_fol <- paste0(tdir, "02_yob")
-  yslb_fol <- paste0(tdir, "03_yslb")
+  tsf_fol <- paste0(tdir, "03_tsf")
   wfm_fol <- paste0(tdir, "04_wfm")
   wffa_fol <- paste0(tdir, "05_wffa")
   ofm_fol <- paste0(tdir, "04_ofm")
   offa_fol <- paste0(tdir, "05_offa")
 
-  fols <- c(by_fol, yob_fol, yslb_fol, wfm_fol, wffa_fol, ofm_fol, offa_fol)
+  fols <- c(by_fol, yob_fol, tsf_fol, wfm_fol, wffa_fol, ofm_fol, offa_fol)
   fs::dir_create(fols)
 
   # individual burn years ---------------------------------------------------
@@ -53,8 +57,9 @@ for(district in districts){
     tidyterra::pull(var = fin_y) %>%
     unique()
 
-  template <- terra::rast(data[["aoi_alb"]], res = 30)
-  aoi_msk <- data[["aoi_msk"]]
+  # change in resolution flows from here
+  template <- terra::rast(data[["aoi_alb"]], res = resolution)
+  aoi_msk <- terra::rasterize(terra::vect(data[["aoi_alb"]]), template)
 
   for(i in seq_along(u_fyrs)){
     by <- f_vecs %>%
@@ -121,34 +126,36 @@ for(district in districts){
 
 
   # year since last burn ----------------------------------------------------
-  cli::cli_progress_step("Creating Annual YSLB Rasters")
+  cli::cli_progress_step("Creating Annual Time Since Fire Rasters")
 
-  yslb_noms <- fs::path(yslb_fol, gsub("yob", "yslb", dir(yob_fol)))
+  tsf_noms <- fs::path(tsf_fol, gsub("yob", "tsf", dir(yob_fol)))
 
-  for(i in seq_along(yslb_noms)){
+  for(i in seq_along(tsf_noms)){
     yob <- terra::rast(fs::dir_ls(yob_fol)[i])
-    yslb <- full_fyrs[i] - yob
-    terra::writeRaster(yslb, yslb_noms[i])
+    tsf <- full_fyrs[i] - yob
+    terra::writeRaster(tsf, tsf_noms[i])
   }
 
 
   # fuel age area matrix ----------------------------------------------------
   cli::cli_progress_step("Calculating Fuel Age Matrix")
 
-  yslb_stk <- terra::rast(fs::dir_ls(yslb_fol))
-  names(yslb_stk) <- full_fyrs
+  tsf_stk <- terra::rast(fs::dir_ls(tsf_fol))
+  names(tsf_stk) <- full_fyrs
+  
+  pix_ha <- resolution^2/10000
 
   # total area
   tot_area <- dplyr::as_tibble(terra::freq(aoi_msk)) %>%
-    dplyr::mutate(area_ha = count * 0.09) %>%
+    dplyr::mutate(area_ha = count * pix_ha) %>%
     dplyr::pull(area_ha)
   # calc fuel age area stats
   fuel_df <- tibble::tibble()
   for(i in seq_along(full_fyrs)){
-    out <- dplyr::as_tibble(terra::freq(yslb_stk[[i]])) %>%
+    out <- dplyr::as_tibble(terra::freq(tsf_stk[[i]])) %>%
       dplyr::mutate(layer = full_fyrs[i],
                     value = paste0("fa", value),
-                    area_ha = count * 0.09) %>%
+                    area_ha = count * pix_ha) %>%
       dplyr::rename(fuel_age = value,
                     year = layer) %>%
       dplyr::select(-count)
@@ -217,10 +224,10 @@ for(district in districts){
       terra::freq() %>%
       dplyr::as_tibble() %>%
       dplyr::mutate(year = paste0("wf", yr),
-                    mask_area_ha = count * 0.09) %>%
+                    mask_area_ha = count * pix_ha) %>%
       dplyr::select(year, mask_area_ha)
     wf_totha_df <- dplyr::bind_rows(wf_totha_df, out_df)
-    wf_burnt <- terra::rast(fs::path(yslb_fol, paste0("yslb", yr-1, ".tif"))) %>%
+    wf_burnt <- terra::rast(fs::path(tsf_fol, paste0("tsf", yr-1, ".tif"))) %>%
       terra::crop(wfm, mask = TRUE)
     terra::writeRaster(wf_burnt, fs::path(wffa_fol, paste0("wffa", yr, ".tif")))
   }
@@ -234,7 +241,7 @@ for(district in districts){
     out <- dplyr::as_tibble(terra::freq(wffa_stk[[i]])) %>%
       dplyr::mutate(layer = paste0("wf", wf_iter[i]),
                     value = paste0("fa", value),
-                    area_ha = count * 0.09) %>%
+                    area_ha = count * pix_ha) %>%
       dplyr::rename(fuel_age = value,
                     year = layer) %>%
       dplyr::select(-count)
@@ -309,10 +316,10 @@ for(district in districts){
       terra::freq() %>%
       dplyr::as_tibble() %>%
       dplyr::mutate(year = paste0("other", yr),
-                    mask_area_ha = count * 0.09) %>%
+                    mask_area_ha = count * pix_ha) %>%
       dplyr::select(year, mask_area_ha)
     of_totha_df <- dplyr::bind_rows(of_totha_df, out_df)
-    of_burnt <- terra::rast(fs::path(yslb_fol, paste0("yslb", yr-1, ".tif"))) %>%
+    of_burnt <- terra::rast(fs::path(tsf_fol, paste0("tsf", yr-1, ".tif"))) %>%
       terra::crop(ofm, mask = TRUE)
     terra::writeRaster(of_burnt, fs::path(offa_fol, paste0("offa", yr, ".tif")))
   }
@@ -326,7 +333,7 @@ for(district in districts){
     out <- dplyr::as_tibble(terra::freq(offa_stk[[i]])) %>%
       dplyr::mutate(layer = paste0("other", of_iter[i]),
                     value = paste0("fa", value),
-                    area_ha = count * 0.09) %>%
+                    area_ha = count * pix_ha) %>%
       dplyr::rename(fuel_age = value,
                     year = layer) %>%
       dplyr::select(-count)
